@@ -1,0 +1,7 @@
+# Ignore PyCharm project files
+.idea/
+.venv/
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc

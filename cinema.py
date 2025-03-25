@@ -14,6 +14,7 @@ class Cinema:
         self.rows = rows
         self.seats_per_row = seats_per_row
         self.seats = [['.' for _ in range(seats_per_row)] for _ in range(rows)]
+        self.d_seats = [['.' for _ in range(seats_per_row)] for _ in range(rows)]
         self.bookings = {}
         self.lock = threading.Lock()  # Lock for thread safety
         self.current_booking_id = 1  # For sequential booking IDs
@@ -26,25 +27,9 @@ class Cinema:
         print("--------------------------------")
         for i in range(self.rows - 1, -1, -1):  # Reverse row order for display
             row_label = chr(ord('A') + i)
-            row_str = row_label + " " + "  ".join(self.seats[i])
+            row_str = row_label + " " + "  ".join(self.d_seats[i])
             print(row_str)
         print("  " + "  ".join(map(str, range(1, self.seats_per_row + 1))))
-
-    def _create_temp_seats_map(self):
-        """Create a temporary map of all seats with current bookings marked.
-
-        Returns:
-            list: 2D array representing seats with '.' for available and '#' for booked
-        """
-        # Create a fresh representation of all seats
-        temp_seats = [['.' for _ in range(self.seats_per_row)] for _ in range(self.rows)]
-
-        # Mark existing bookings
-        for booking_seats in self.bookings.values():
-            for row, col in booking_seats:
-                temp_seats[row][col] = '#'
-
-        return temp_seats
 
     def _parse_seat_position(self, start_pos):
         """Parse a seat position string (e.g., 'A1') into row and column indices.
@@ -182,7 +167,7 @@ class Cinema:
                 return None, None
 
             # Create a temporary representation of all seats
-            temp_seats = self._create_temp_seats_map()
+            temp_seats = [row[:] for row in self.seats]
 
             # Select seats based on allocation strategy
             if start_pos:
@@ -194,8 +179,8 @@ class Cinema:
                 # Default allocation - starting from row 0 (closest to screen)
                 selected_seats = self._allocate_default_seats(temp_seats, num_tickets)
 
-            # Update the seat display for visualization
-            self.seats = [row[:] for row in temp_seats]
+            # Update display
+            self.d_seats = temp_seats
 
             # Generate booking ID
             booking_id = f"GIC{self.current_booking_id:04d}"
@@ -212,13 +197,14 @@ class Cinema:
         Returns:
             str: The confirmed booking ID
         """
-        self.bookings[booking_id] = selected_seats
-        self.current_booking_id += 1
-        self.available_seats -= len(selected_seats)
+        with self.lock:
+            self.bookings[booking_id] = selected_seats
+            self.current_booking_id += 1
+            self.available_seats -= len(selected_seats)
 
-        # Update the actual seats status to mark booked seats
-        for row, col in selected_seats:
-            self.seats[row][col] = '#'
+            # Update the actual seats status to mark booked seats
+            for row, col in selected_seats:
+                self.seats[row][col] = '#'
 
         return booking_id
 
@@ -246,6 +232,6 @@ class Cinema:
                     temp_seats[row][col] = '#'  # Other bookings
 
         # Update display
-        self.seats = temp_seats
+        self.d_seats = temp_seats
 
         return self.bookings.get(booking_id)

@@ -1,5 +1,6 @@
 import unittest
-from cinema import Cinema  # Assuming the Cinema class is in a file called cinema.py
+from cinema import Cinema
+import threading
 
 
 class TestCinema(unittest.TestCase):
@@ -111,12 +112,55 @@ class TestCinema(unittest.TestCase):
 
         # Verify all bookings
         self.assertEqual(len(self.cinema.bookings), 3)
+
         self.assertEqual(self.cinema.available_seats, 41)
 
         # Check each booking
         self.assertEqual(len(self.cinema.check_booking(booking_id1)), 3)
         self.assertEqual(len(self.cinema.check_booking(booking_id2)), 3)
         self.assertEqual(len(self.cinema.check_booking(booking_id3)), 3)
+
+    def test_concurrent_booking_unit(self):
+        """Unit test for concurrent booking of different seats."""
+
+        def book_seats(num_tickets, start_pos, results):
+            try:
+                booking_id, seats = self.cinema.book_seats(num_tickets, start_pos)
+                if booking_id:
+                    self.cinema.confirm_booking(booking_id, seats)
+                    results.append(seats)  # store the seats that were booked.
+                else:
+                    results.append(None)  # indicate failure
+            except Exception as e:
+                print(f"Error in thread: {e}")
+                results.append(None)
+
+        results = []
+        threads = [
+            threading.Thread(target=book_seats, args=(2, 'A1', results)),
+            threading.Thread(target=book_seats, args=(2, 'B1', results)),
+            threading.Thread(target=book_seats, args=(2, 'C1', results)),
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        booked_seats = self.cinema.total_seats - self.cinema.available_seats
+
+        self.assertEqual(booked_seats, 6, "Expected 6 booked seats.")
+        self.assertEqual(len(results), 3, "Expected 3 booking results")
+
+        # check that each booking succeeded.
+        self.assertTrue(all(results), "All bookings should succeed")
+
+        # check that the correct seats were booked.
+        expected_seats = [[(0, 0), (0, 1)], [(1, 0), (1, 1)], [(2, 0), (2, 1)]]
+
+        for i in range(3):
+            self.assertEqual(sorted(results[i]), sorted(expected_seats[i]), f"Seats for booking {i + 1} are incorrect")
 
 
 if __name__ == "__main__":
